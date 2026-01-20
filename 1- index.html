@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Making Sense Slots</title>
+<style>
+body {background: #FFFF00; margin:0; font-family:Arial; overflow:hidden;}
+.title {text-align:center; font-size:48px; color:#000; text-shadow:3px 3px #FFF, -1px -1px #0FF, 1px 1px #F0F; position:absolute; top:10%; left:50%; transform:translateX(-50%); font-weight:bold; /* Graffiti mix */}
+.popart {position:absolute; top:20%; left:10%; font-size:24px; color:#00F; text-shadow:2px 2px #FF0; mix-blend-mode:overlay;} /* Pop words */
+.graffiti {position:absolute; top:25%; right:10%; font-size:20px; color:#F00; transform:rotate(-5deg); text-shadow:1px 1px #0F0;} /* Ribbons */
+#game {position:absolute; top:35%; left:50%; transform:translate(-50%,-50%); display:flex; gap:10px;}
+.reel {width:120px; height:360px; background:#FFF; border:3px solid #000; position:relative; overflow:hidden; box-shadow:0 0 20px #000;} /* White boxes */
+.symbol {position:absolute; width:100%; height:120px; display:flex; align-items:center; justify-content:center; font-size:28px; border-bottom:1px solid #CCC;}
+#controls {position:absolute; bottom:20%; left:50%; transform:translateX(-50%); display:flex; gap:20px; align-items:center;}
+.btn {width:80px; height:80px; border-radius:50%; font-size:24px; border:none; cursor:pointer; box-shadow:0 5px 10px #000;}
+#spin {background:#F00; color:#FFF; font-weight:bold;}
+.betbtn {background:#FFF; color:#000; font-size:32px;}
+#balance, #winamt, #betamt {background:#FFF; padding:10px 20px; border-radius:20px; font-weight:bold; box-shadow:0 5px 10px #000;}
+#paylines {position:absolute; bottom:5%; left:50%; transform:translateX(-50%); color:#000; font-size:18px;}
+button:focus {outline:none !important;} /* No squiggles */
+.neon-flash {animation: flash 0.5s infinite alternate;} @keyframes flash {0%{box-shadow:0 0 20px #00F;} 100%{box-shadow:0 0 50px #F0F,0 0 50px #FF0;}}
+</style>
+</head>
+<body>
+<div class="title">MAKING SENSE!</div>
+<div class="popart">Making<br>Sense</div>
+<div class="graffiti">REVIEW<br>WIN<br>BALANCE</div>
+<canvas id="canvas" width="640" height="400" style="position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);display:none;"></canvas> <!-- Fireworks -->
+<div id="game">
+  <div class="reel" id="reel1"><div class="symbol" style="top:0">?</div><div class="symbol" style="top:120px">?</div><div class="symbol" style="top:240px">?</div></div>
+  <!-- Repeat for reel2-5 -->
+  <div class="reel" id="reel2"><div class="symbol" style="top:0">?</div><div class="symbol" style="top:120px">?</div><div class="symbol" style="top:240px">?</div></div>
+  <div class="reel" id="reel3"><div class="symbol" style="top:0">?</div><div class="symbol" style="top:120px">?</div><div class="symbol" style="top:240px">?</div></div>
+  <div class="reel" id="reel4"><div class="symbol" style="top:0">?</div><div class="symbol" style="top:120px">?</div><div class="symbol" style="top:240px">?</div></div>
+  <div class="reel" id="reel5"><div class="symbol" style="top:0">?</div><div class="symbol" style="top:120px">?</div><div class="symbol" style="top:240px">?</div></div>
+</div>
+<div id="controls">
+  <div id="balance">Balance: $1000</div>
+  <button class="btn betbtn" onclick="adjustBet(-1)">−</button>
+  <button id="spin" class="btn" onclick="spin()">SPIN</button>
+  <button class="btn betbtn" onclick="adjustBet(1)">+</button>
+  <div id="betamt">Bet: $1</div>
+  <div id="winamt">Win: $0</div>
+</div>
+<div id="paylines">9 Paylines Active</div>
+
+<script>
+const symbols = ['win','break','good','rich','man','lose','pain','gain','luck','bet','play','risk','safe','bold','cash','debt','hope','fear'];
+const reels = [0,1,2,3,4].map(i => symbols.slice(i*3,(i+1)*3).concat(symbols)); // Weighted strips
+const paylines = [[0,0,0,0,0],[1,1,1,1,1],[2,2,2,2,2],[0,0,1,1,2],[2,2,1,1,0],[0,1,1,1,2],[2,1,1,1,0],[1,0,0,0,1],[1,2,2,2,1]];
+const senseWins = ['good luck','win cash','bold play','pain gain'];
+let balance = 1000, bet = 1, positions = Array(5).fill(0), spinning = false;
+
+function drawReels() {
+  for(let r=0; r<5; r++) {
+    const reel = document.getElementById(`reel${r+1}`);
+    for(let s=0; s<3; s++) {
+      reel.children[s].textContent = symbols[(positions[r] + s -1 + symbols.length) % symbols.length];
+    }
+  }
+}
+
+function checkWin() {
+  let payout = 0;
+  for(let line of paylines) {
+    let combo = line.map(p => symbols[(positions[p] + 1) % symbols.length]); // Middle row
+    let phrase = combo.join(' ');
+    if(senseWins.some(w => phrase.includes(w))) payout += 2 * bet;
+    if(combo.filter(s => s==='win').length >=3) payout += 10 * bet;
+  }
+  payout = Math.floor(payout * 0.96); // RTP nudge
+  if(payout > 0) {
+    balance += payout;
+    document.getElementById('winamt').textContent = `PAID $${payout}`;
+    if(payout >= 5*bet) bigWin();
+    else setTimeout(() => document.getElementById('winamt').textContent='Win: $0', 2000);
+  } else {
+    document.getElementById('winamt').textContent = 'NO WIN';
+    setTimeout(() => document.getElementById('winamt').textContent='Win: $0', 1500);
+  }
+  document.getElementById('balance').textContent = `Balance: $${balance}`;
+}
+
+function spin() {
+  if(spinning || balance < bet) return;
+  spinning = true; document.getElementById('spin').disabled = true;
+  balance -= bet; document.getElementById('balance').textContent = `Balance: $${balance}`;
+  let time = 0;
+  const spinReel = (r, delay) => {
+    setTimeout(() => {
+      positions[r] = Math.floor(Math.random() * symbols.length);
+      drawReels();
+    }, time + delay);
+    time += 400;
+  };
+  [0,1,2,3,4].forEach((r,i) => spinReel(r, i*200));
+  setTimeout(() => {
+    checkWin();
+    document.getElementById('spin').disabled = false;
+    spinning = false;
+  }, 2200);
+}
+
+function adjustBet(delta) {
+  bet = Math.max(1, Math.min(10, bet + delta));
+  document.getElementById('betamt').textContent = `Bet: $${bet}`;
+}
+
+function bigWin() {
+  document.body.classList.add('neon-flash');
+  fireworks();
+  setTimeout(() => document.body.classList.remove('neon-flash'), 3000);
+}
+
+function fireworks() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.style.display = 'block';
+  // Simple fireworks particles
+  for(let i=0; i<30; i++) {
+    setTimeout(() => {
+      ctx.fillStyle = `hsl(${Math.random()*360},100%,50%)`;
+      ctx.beginPath(); ctx.arc(Math.random()*640, Math.random()*400, Math.random()*20+5, 0, Math.PI*2); ctx.fil
